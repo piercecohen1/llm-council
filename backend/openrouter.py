@@ -17,6 +17,9 @@ def _build_web_search_tool(
     return {
         "type": "openrouter:web_search",
         "parameters": {
+            # "auto" = native provider search when available, Exa as fallback.
+            # Default, but pinned explicitly so future default changes don't surprise us.
+            "engine": "auto",
             "max_results": max_results,
             "max_total_results": max_total_results,
         },

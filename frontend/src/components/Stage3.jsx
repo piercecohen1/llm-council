@@ -1,4 +1,5 @@
 import ReactMarkdown from 'react-markdown';
+import Citations from './Citations';
 import './Stage3.css';
 
 export default function Stage3({ finalResponse }) {
@@ -16,6 +17,10 @@ export default function Stage3({ finalResponse }) {
         <div className="final-text markdown-content">
           <ReactMarkdown>{finalResponse.response}</ReactMarkdown>
         </div>
+        <Citations
+          citations={finalResponse.citations}
+          searchCount={finalResponse.web_search_requests}
+        />
       </div>
     </div>
   );

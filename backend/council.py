@@ -17,16 +17,19 @@ async def stage1_collect_responses(user_query: str) -> List[Dict[str, Any]]:
     """
     messages = [{"role": "user", "content": user_query}]
 
-    # Query all models in parallel
-    responses = await query_models_parallel(COUNCIL_MODELS, messages)
+    # Stage 1 is where fresh facts matter most — let each council member hit the web.
+    responses = await query_models_parallel(
+        COUNCIL_MODELS, messages, enable_web_search=True
+    )
 
-    # Format results
     stage1_results = []
     for model, response in responses.items():
-        if response is not None:  # Only include successful responses
+        if response is not None:
             stage1_results.append({
                 "model": model,
-                "response": response.get('content', '')
+                "response": response.get('content', ''),
+                "citations": response.get('citations') or [],
+                "web_search_requests": response.get('web_search_requests'),
             })
 
     return stage1_results
@@ -158,19 +161,21 @@ Provide a clear, well-reasoned final answer that represents the council's collec
 
     messages = [{"role": "user", "content": chairman_prompt}]
 
-    # Query the chairman model
-    response = await query_model(CHAIRMAN_MODEL, messages)
+    # Chairman can also search the web if synthesis needs verification or fresh data.
+    response = await query_model(CHAIRMAN_MODEL, messages, enable_web_search=True)
 
     if response is None:
-        # Fallback if chairman fails
         return {
             "model": CHAIRMAN_MODEL,
-            "response": "Error: Unable to generate final synthesis."
+            "response": "Error: Unable to generate final synthesis.",
+            "citations": [],
         }
 
     return {
         "model": CHAIRMAN_MODEL,
-        "response": response.get('content', '')
+        "response": response.get('content', ''),
+        "citations": response.get('citations') or [],
+        "web_search_requests": response.get('web_search_requests'),
     }
 
 

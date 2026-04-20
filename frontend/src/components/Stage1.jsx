@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import Citations from './Citations';
 import './Stage1.css';
 
 export default function Stage1({ responses }) {
@@ -8,6 +9,8 @@ export default function Stage1({ responses }) {
   if (!responses || responses.length === 0) {
     return null;
   }
+
+  const active = responses[activeTab];
 
   return (
     <div className="stage stage1">
@@ -21,15 +24,22 @@ export default function Stage1({ responses }) {
             onClick={() => setActiveTab(index)}
           >
             {resp.model.split('/')[1] || resp.model}
+            {resp.citations && resp.citations.length > 0 && (
+              <span className="tab-web-badge" title="Used web search">🌐</span>
+            )}
           </button>
         ))}
       </div>
 
       <div className="tab-content">
-        <div className="model-name">{responses[activeTab].model}</div>
+        <div className="model-name">{active.model}</div>
         <div className="response-text markdown-content">
-          <ReactMarkdown>{responses[activeTab].response}</ReactMarkdown>
+          <ReactMarkdown>{active.response}</ReactMarkdown>
         </div>
+        <Citations
+          citations={active.citations}
+          searchCount={active.web_search_requests}
+        />
       </div>
     </div>
   );

@@ -63,3 +63,9 @@
   color: #333;
   line-height: 1.6;
 }
+
+.tab-web-badge {
+  margin-left: 6px;
+  font-size: 11px;
+  opacity: 0.85;
+}

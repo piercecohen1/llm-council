@@ -17,22 +17,25 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - Backend runs on **port 8001** (NOT 8000 - user had another app on 8000)
 
 **`openrouter.py`**
-- `query_model()`: Single async model query
-- `query_models_parallel()`: Parallel queries using `asyncio.gather()`
-- Returns dict with 'content' and optional 'reasoning_details'
+- `query_model(model, messages, enable_web_search=False)`: Single async model query. When `enable_web_search=True`, attaches the `openrouter:web_search` server tool (engine pinned to `"auto"`, `max_results=5`, `max_total_results=15`)
+- `query_models_parallel()`: Parallel queries using `asyncio.gather()`; forwards `enable_web_search` to each sub-call
+- Returns dict with 'content', optional 'reasoning_details', 'citations' (list of `{url, title, content}` from `url_citation` annotations), and optional 'web_search_requests' count from `usage.server_tool_use`
 - Graceful degradation: returns None on failure, continues with successful responses
+- Uses `openrouter:web_search` server tool (not the deprecated `plugins: [{id: "web"}]` or `:online` variant) — model decides when/whether to search
 
 **`council.py`** - The Core Logic
-- `stage1_collect_responses()`: Parallel queries to all council models
+- `stage1_collect_responses(user_query, enable_web_search=True)`: Parallel queries to all council models; threads web-search flag through
 - `stage2_collect_rankings()`:
   - Anonymizes responses as "Response A, B, C, etc."
   - Creates `label_to_model` mapping for de-anonymization
   - Prompts models to evaluate and rank (with strict format requirements)
   - Returns tuple: (rankings_list, label_to_model_dict)
   - Each ranking includes both raw text and `parsed_ranking` list
-- `stage3_synthesize_final()`: Chairman synthesizes from all responses + rankings
+  - **Never uses web search** — evaluation only, so the ranking judgment reflects the Stage 1 text itself
+- `stage3_synthesize_final(..., enable_web_search=True)`: Chairman synthesizes from all responses + rankings; can also search the web when enabled
 - `parse_ranking_from_text()`: Extracts "FINAL RANKING:" section, handles both numbered lists and plain format
 - `calculate_aggregate_rankings()`: Computes average rank position across all peer evaluations
+- `run_full_council(user_query, enable_web_search=True)`: Top-level orchestrator; threads the flag to Stage 1 and Stage 3
 
 **`storage.py`**
 - JSON-based conversation storage in `data/conversations/`
@@ -44,6 +47,7 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - FastAPI app with CORS enabled for localhost:5173 and localhost:3000
 - POST `/api/conversations/{id}/message` returns metadata in addition to stages
 - Metadata includes: label_to_model mapping and aggregate_rankings
+- `SendMessageRequest` accepts `enable_web_search: bool = True` (default preserves behavior if the field is missing); passed through to both streaming and non-streaming council runs
 
 ### Frontend Structure (`frontend/src/`)
 
@@ -51,15 +55,18 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - Main orchestration: manages conversations list and current conversation
 - Handles message sending and metadata storage
 - Important: metadata is stored in the UI state for display but not persisted to backend JSON
+- Owns `webSearchEnabled` state, persisted to `localStorage` under key `llm-council.webSearchEnabled` (defaults to `true`); passed to `api.sendMessageStream` as `{ enableWebSearch }`
 
 **`components/ChatInterface.jsx`**
 - Multiline textarea (3 rows, resizable)
 - Enter to send, Shift+Enter for new line
 - User messages wrapped in markdown-content class for padding
+- Above the textarea: pill-style web-search toggle (accessible `<label>` wrapping a hidden checkbox + styled switch). Receives `webSearchEnabled` / `onToggleWebSearch` props from `App.jsx`
 
 **`components/Stage1.jsx`**
 - Tab view of individual model responses
 - ReactMarkdown rendering with markdown-content wrapper
+- Renders `<Citations>` under the active tab's response; tabs for models that cited sources get a 🌐 badge
 
 **`components/Stage2.jsx`**
 - **Critical Feature**: Tab view showing RAW evaluation text from each model
@@ -71,6 +78,13 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 **`components/Stage3.jsx`**
 - Final synthesized answer from chairman
 - Green-tinted background (#f0fff0) to highlight conclusion
+- Renders `<Citations>` below the final answer when the Chairman searched
+
+**`components/Citations.jsx`**
+- Shared component used by Stage1 and Stage3
+- Takes `{ citations, searchCount }` — renders nothing if `citations` is empty
+- Deduplicates by URL, shows a numbered list of links that open in a new tab
+- Header reads "Sources (N searches)" when `searchCount` is available
 
 **Styling (`*.css`)**
 - Light mode theme (not dark mode)
@@ -108,6 +122,11 @@ This strict format allows reliable parsing while still getting thoughtful evalua
 - Parsed rankings shown below raw text for validation
 - Users can verify system's interpretation of model outputs
 - This builds trust and allows debugging of edge cases
+
+### Web Search Scoping
+- Stage 1 (initial answers) and Stage 3 (Chairman synthesis) get the web_search server tool; Stage 2 (peer ranking) does not
+- Rationale: rankers should judge the text they were given, not search for their own facts and second-guess Stage 1
+- Default is ON (toggle visible in the input toolbar); the model still decides per-request whether a search is actually needed, so enabling it is not the same as forcing a search
 
 ## Important Implementation Details
 
@@ -148,19 +167,19 @@ Use `test_openrouter.py` to verify API connectivity and test different model ide
 ## Data Flow Summary
 
 ```
-User Query
+User Query (+ enable_web_search flag from UI toggle)
     ↓
-Stage 1: Parallel queries → [individual responses]
+Stage 1: Parallel queries (w/ optional openrouter:web_search) → [responses + citations]
     ↓
-Stage 2: Anonymize → Parallel ranking queries → [evaluations + parsed rankings]
+Stage 2: Anonymize → Parallel ranking queries (NO web search) → [evaluations + parsed rankings]
     ↓
 Aggregate Rankings Calculation → [sorted by avg position]
     ↓
-Stage 3: Chairman synthesis with full context
+Stage 3: Chairman synthesis (w/ optional openrouter:web_search) → [answer + citations]
     ↓
 Return: {stage1, stage2, stage3, metadata}
     ↓
-Frontend: Display with tabs + validation UI
+Frontend: Display with tabs + validation UI + Sources lists
 ```
 
 The entire flow is async/parallel where possible to minimize latency.

@@ -1,25 +1,78 @@
-.stage3 {
-  background: #f0fff0;
-  border-color: #c8e6c8;
+.stage--3 .stage__numeral {
+  color: var(--forest);
 }
 
-.final-response {
-  background: #ffffff;
-  padding: 20px;
-  border-radius: 6px;
-  border: 1px solid #c8e6c8;
+.ruling {
+  position: relative;
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--forest);
+  border-radius: var(--radius-md);
+  padding: 28px 36px 28px 36px;
+  overflow: hidden;
 }
 
-.chairman-label {
-  color: #2d8a2d;
+.ruling::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 180px;
+  height: 100%;
+  background: radial-gradient(
+    ellipse at 100% 0%,
+    rgba(46, 90, 62, 0.05),
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+.ruling__chop {
+  position: absolute;
+  top: 18px;
+  right: 24px;
+  color: var(--forest);
+  opacity: 0.8;
+  transform: rotate(-8deg);
+  pointer-events: none;
+}
+
+.ruling__chair {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-bottom: 14px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--hairline);
+  padding-right: 44px;
+}
+
+.ruling__chair .eyebrow {
+  color: var(--forest);
+}
+
+.ruling__chair-model {
+  font-family: var(--font-mono);
   font-size: 12px;
-  font-family: monospace;
-  margin-bottom: 12px;
-  font-weight: 600;
+  color: var(--ink-soft);
+  font-weight: 500;
 }
 
-.final-text {
-  color: #333;
+.ruling__body {
+  font-size: 16px;
   line-height: 1.7;
-  font-size: 15px;
+  color: var(--ink);
+}
+
+/* Drop-cap style for the first paragraph — echoes editorial tradition. */
+.ruling__body > p:first-of-type::first-letter {
+  font-family: var(--font-display);
+  font-size: 3.4em;
+  float: left;
+  line-height: 0.92;
+  margin: 4px 10px 0 -2px;
+  color: var(--forest);
+  font-weight: 500;
+  font-variation-settings: 'SOFT' 30, 'WONK' 1, 'opsz' 144;
+  letter-spacing: -0.02em;
 }

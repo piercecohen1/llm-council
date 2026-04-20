@@ -1,12 +1,19 @@
 """OpenRouter API client for making LLM requests."""
 
+import time
 import httpx
 from typing import List, Dict, Any, Optional
 from .config import OPENROUTER_API_KEY, OPENROUTER_API_URL
 
+OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
+
 # Default cap on total web search results per request (controls cost + context size).
 DEFAULT_WEB_SEARCH_MAX_RESULTS = 5
 DEFAULT_WEB_SEARCH_MAX_TOTAL_RESULTS = 15
+
+# In-memory cache for the /models endpoint (populated lazily, refreshed hourly).
+_MODELS_CACHE: Dict[str, Any] = {"data": None, "fetched_at": 0.0}
+_MODELS_CACHE_TTL_SECONDS = 3600
 
 
 def _build_web_search_tool(
@@ -31,6 +38,7 @@ async def query_model(
     messages: List[Dict[str, str]],
     timeout: float = 180.0,
     enable_web_search: bool = False,
+    reasoning: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Query a single model via OpenRouter API.
@@ -42,6 +50,9 @@ async def query_model(
         enable_web_search: If True, attach the openrouter:web_search server tool so
             the model can fetch live web results. Citations come back as
             `annotations` on the assistant message.
+        reasoning: Optional OpenRouter `reasoning` param, e.g. `{"effort": "high"}`
+            or `{"max_tokens": 2000}` or `{"enabled": False}`. When None, no
+            `reasoning` field is sent (provider default).
 
     Returns:
         Response dict with 'content', optional 'reasoning_details', optional
@@ -60,6 +71,9 @@ async def query_model(
 
     if enable_web_search:
         payload["tools"] = [_build_web_search_tool()]
+
+    if reasoning:
+        payload["reasoning"] = reasoning
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
@@ -117,10 +131,50 @@ def _extract_citations(annotations: Optional[List[Dict[str, Any]]]) -> List[Dict
     return citations
 
 
+async def list_openrouter_models(force_refresh: bool = False) -> List[Dict[str, Any]]:
+    """
+    Fetch the list of available models from OpenRouter, with an hourly in-memory cache.
+
+    Returns a list of dicts with the fields the UI picker needs:
+    id, name, description, context_length, pricing (prompt/completion), modality.
+    """
+    now = time.time()
+    cached = _MODELS_CACHE["data"]
+    fetched_at = _MODELS_CACHE["fetched_at"]
+    if not force_refresh and cached is not None and (now - fetched_at) < _MODELS_CACHE_TTL_SECONDS:
+        return cached
+
+    headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}"} if OPENROUTER_API_KEY else {}
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(OPENROUTER_MODELS_URL, headers=headers)
+        response.raise_for_status()
+        payload = response.json()
+
+    raw_models = payload.get("data", [])
+    simplified = [
+        {
+            "id": m.get("id"),
+            "name": m.get("name") or m.get("id"),
+            "description": m.get("description") or "",
+            "context_length": m.get("context_length"),
+            "pricing": m.get("pricing") or {},
+            "modality": (m.get("architecture") or {}).get("modality"),
+        }
+        for m in raw_models
+        if m.get("id")
+    ]
+
+    _MODELS_CACHE["data"] = simplified
+    _MODELS_CACHE["fetched_at"] = now
+    return simplified
+
+
 async def query_models_parallel(
     models: List[str],
     messages: List[Dict[str, str]],
     enable_web_search: bool = False,
+    reasoning_configs: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> Dict[str, Optional[Dict[str, Any]]]:
     """
     Query multiple models in parallel.
@@ -129,14 +183,24 @@ async def query_models_parallel(
         models: List of OpenRouter model identifiers
         messages: List of message dicts to send to each model
         enable_web_search: Forwarded to each per-model query.
+        reasoning_configs: Optional map from model id -> reasoning config to
+            include in that model's request. Models absent from the map receive
+            no `reasoning` field (provider default).
 
     Returns:
         Dict mapping model identifier to response dict (or None if failed)
     """
     import asyncio
 
+    reasoning_configs = reasoning_configs or {}
+
     tasks = [
-        query_model(model, messages, enable_web_search=enable_web_search)
+        query_model(
+            model,
+            messages,
+            enable_web_search=enable_web_search,
+            reasoning=reasoning_configs.get(model),
+        )
         for model in models
     ]
     responses = await asyncio.gather(*tasks)

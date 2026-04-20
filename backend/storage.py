@@ -2,10 +2,13 @@
 
 import json
 import os
+import uuid
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 from .config import DATA_DIR
+
+COUNCIL_CONFIGS_FILE = os.path.join(os.path.dirname(DATA_DIR), "council_configs.json")
 
 
 def ensure_data_dir():
@@ -34,6 +37,7 @@ def create_conversation(conversation_id: str) -> Dict[str, Any]:
         "id": conversation_id,
         "created_at": datetime.utcnow().isoformat(),
         "title": "New Conversation",
+        "archived": False,
         "messages": []
     }
 
@@ -78,9 +82,13 @@ def save_conversation(conversation: Dict[str, Any]):
         json.dump(conversation, f, indent=2)
 
 
-def list_conversations() -> List[Dict[str, Any]]:
+def list_conversations(include_archived: bool = True) -> List[Dict[str, Any]]:
     """
     List all conversations (metadata only).
+
+    Args:
+        include_archived: If False, archived conversations are omitted. Default True
+            so callers (e.g. the frontend) can partition client-side.
 
     Returns:
         List of conversation metadata dicts
@@ -93,11 +101,14 @@ def list_conversations() -> List[Dict[str, Any]]:
             path = os.path.join(DATA_DIR, filename)
             with open(path, 'r') as f:
                 data = json.load(f)
-                # Return metadata only
+                archived = bool(data.get("archived", False))
+                if archived and not include_archived:
+                    continue
                 conversations.append({
                     "id": data["id"],
                     "created_at": data["created_at"],
                     "title": data.get("title", "New Conversation"),
+                    "archived": archived,
                     "message_count": len(data["messages"])
                 })
 
@@ -105,6 +116,29 @@ def list_conversations() -> List[Dict[str, Any]]:
     conversations.sort(key=lambda x: x["created_at"], reverse=True)
 
     return conversations
+
+
+def set_conversation_archived(conversation_id: str, archived: bool) -> Optional[Dict[str, Any]]:
+    """
+    Archive or unarchive a conversation. Returns the updated conversation or None.
+    """
+    conversation = get_conversation(conversation_id)
+    if conversation is None:
+        return None
+    conversation["archived"] = bool(archived)
+    save_conversation(conversation)
+    return conversation
+
+
+def delete_conversation(conversation_id: str) -> bool:
+    """
+    Permanently delete a conversation from disk. Returns True if it existed.
+    """
+    path = get_conversation_path(conversation_id)
+    if not os.path.exists(path):
+        return False
+    os.remove(path)
+    return True
 
 
 def add_user_message(conversation_id: str, content: str):
@@ -154,6 +188,79 @@ def add_assistant_message(
     })
 
     save_conversation(conversation)
+
+
+def _load_council_configs_file() -> List[Dict[str, Any]]:
+    if not os.path.exists(COUNCIL_CONFIGS_FILE):
+        return []
+    with open(COUNCIL_CONFIGS_FILE, "r") as f:
+        data = json.load(f)
+    return data if isinstance(data, list) else []
+
+
+def _save_council_configs_file(configs: List[Dict[str, Any]]):
+    Path(os.path.dirname(COUNCIL_CONFIGS_FILE)).mkdir(parents=True, exist_ok=True)
+    with open(COUNCIL_CONFIGS_FILE, "w") as f:
+        json.dump(configs, f, indent=2)
+
+
+def list_council_configs() -> List[Dict[str, Any]]:
+    """Return all saved council configs."""
+    return _load_council_configs_file()
+
+
+def create_council_config(
+    name: str,
+    council_models: List[str],
+    chairman_model: str,
+    reasoning_configs: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """Persist a new named council config and return it."""
+    configs = _load_council_configs_file()
+    config = {
+        "id": str(uuid.uuid4()),
+        "name": name,
+        "council_models": council_models,
+        "chairman_model": chairman_model,
+        "reasoning_configs": reasoning_configs or {},
+        "created_at": datetime.utcnow().isoformat(),
+    }
+    configs.append(config)
+    _save_council_configs_file(configs)
+    return config
+
+
+def update_council_config(
+    config_id: str,
+    name: str,
+    council_models: List[str],
+    chairman_model: str,
+    reasoning_configs: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> Optional[Dict[str, Any]]:
+    """Update an existing council config by id. Returns the updated config or None."""
+    configs = _load_council_configs_file()
+    for idx, cfg in enumerate(configs):
+        if cfg.get("id") == config_id:
+            cfg.update({
+                "name": name,
+                "council_models": council_models,
+                "chairman_model": chairman_model,
+                "reasoning_configs": reasoning_configs or {},
+            })
+            configs[idx] = cfg
+            _save_council_configs_file(configs)
+            return cfg
+    return None
+
+
+def delete_council_config(config_id: str) -> bool:
+    """Remove a council config. Returns True if it existed."""
+    configs = _load_council_configs_file()
+    filtered = [c for c in configs if c.get("id") != config_id]
+    if len(filtered) == len(configs):
+        return False
+    _save_council_configs_file(filtered)
+    return True
 
 
 def update_conversation_title(conversation_id: str, title: str):

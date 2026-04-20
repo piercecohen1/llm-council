@@ -1,71 +1,130 @@
+/* Shared base styles for stages — all three use the same scaffolding. */
 .stage {
-  margin: 24px 0;
-  padding: 20px;
-  background: #fafafa;
-  border-radius: 8px;
-  border: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
-.stage-title {
-  margin: 0 0 16px 0;
-  color: #333;
-  font-size: 16px;
-  font-weight: 600;
+.stage__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding-bottom: 4px;
 }
 
+.stage__numeral {
+  font-family: var(--font-display);
+  font-size: 42px;
+  font-weight: 400;
+  color: var(--ink);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variation-settings: 'SOFT' 30, 'WONK' 1, 'opsz' 96;
+  min-width: 44px;
+  text-align: center;
+  margin-top: -6px;
+}
+
+.stage__meta {
+  flex: 1;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.stage__title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: -0.012em;
+  line-height: 1.15;
+  font-variation-settings: 'SOFT' 30, 'WONK' 1, 'opsz' 32;
+  margin-bottom: 3px;
+}
+
+.stage__dek {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 14.5px;
+  color: var(--ink-muted);
+  font-variation-settings: 'SOFT' 40, 'opsz' 18;
+}
+
+/* —— Tabs —— */
 .tabs {
   display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: 0;
+  border-bottom: 1px solid var(--hairline);
+  margin-bottom: 0;
   flex-wrap: wrap;
 }
 
 .tab {
-  padding: 8px 16px;
-  background: #ffffff;
-  border: 1px solid #d0d0d0;
-  border-radius: 6px 6px 0 0;
-  color: #666;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  color: var(--ink-muted);
   cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  transition: color 0.15s;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
 }
 
 .tab:hover {
-  background: #f0f0f0;
-  color: #333;
-  border-color: #4a90e2;
+  color: var(--ink);
 }
 
-.tab.active {
-  background: #ffffff;
-  color: #4a90e2;
-  border-color: #4a90e2;
-  border-bottom-color: #ffffff;
-  font-weight: 600;
+.tab--active {
+  color: var(--ink);
+  border-bottom-color: var(--wine);
 }
 
-.tab-content {
-  background: #ffffff;
-  padding: 16px;
-  border-radius: 6px;
-  border: 1px solid #e0e0e0;
-}
-
-.model-name {
-  color: #888;
+.tab__name {
+  font-family: var(--font-mono);
   font-size: 12px;
-  margin-bottom: 12px;
-  font-family: monospace;
+  font-weight: 500;
 }
 
-.response-text {
-  color: #333;
-  line-height: 1.6;
+.tab__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--wine);
 }
 
-.tab-web-badge {
-  margin-left: 6px;
-  font-size: 11px;
-  opacity: 0.85;
+/* —— Stage panel (content body) —— */
+.stage__panel {
+  background: var(--paper-raised);
+  border: 1px solid var(--hairline);
+  border-top: none;
+  padding: 22px 26px 22px 26px;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.stage__panel-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.stage__model-id {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  letter-spacing: 0.01em;
+}
+
+.stage__panel-body {
+  color: var(--ink);
 }

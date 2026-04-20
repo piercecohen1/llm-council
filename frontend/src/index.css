@@ -1,12 +1,54 @@
-:root {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+/*
+ * LLM Council — Editorial Chambers aesthetic
+ * Typography: Fraunces (display serif, variable), Geist (body sans), JetBrains Mono
+ * Palette: warm paper / ink / wine accent, with small seams of forest and gold.
+ */
 
+:root {
+  /* —— Paper & ink —— */
+  --paper: #f7f2e7;
+  --paper-raised: #fcf8ee;
+  --parchment: #efe7d2;
+  --parchment-deep: #e6dcc1;
+  --ink: #16130d;
+  --ink-soft: #423c30;
+  --ink-muted: #8c8372;
+  --ink-faint: #b7aa8f;
+  --rule: #d4c9ac;
+  --hairline: #e3d9bd;
+
+  /* —— Accents —— */
+  --wine: #8b2635;
+  --wine-deep: #5f1a26;
+  --wine-soft: #f2e1e2;
+  --gold: #9c7a1f;
+  --gold-soft: #f4ead3;
+  --forest: #2e5a3e;
+  --forest-soft: #e0ebdf;
+  --danger: #a33a3a;
+
+  /* —— Type —— */
+  --font-display: 'Fraunces', 'Iowan Old Style', 'Georgia', serif;
+  --font-body: 'Geist', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* —— Other —— */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --shadow-soft: 0 1px 0 rgba(22, 19, 13, 0.04), 0 12px 32px -20px rgba(22, 19, 13, 0.18);
+
+  color-scheme: light;
+  color: var(--ink);
+  background: var(--paper);
+
+  font-family: var(--font-body);
+  font-weight: 400;
+  line-height: 1.55;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'ss01', 'cv11';
 }
 
 * {
@@ -15,26 +57,71 @@
   box-sizing: border-box;
 }
 
+html,
 body {
-  margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: #f5f5f5;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+/* Subtle paper grain — radial warmth + fine noise via SVG-in-CSS */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(156, 122, 31, 0.06), transparent 60%),
+    radial-gradient(ellipse at 100% 100%, rgba(139, 38, 53, 0.04), transparent 55%);
 }
 
 #root {
+  position: relative;
+  z-index: 1;
   height: 100vh;
   width: 100vw;
   overflow: hidden;
 }
 
-/* Global markdown styling */
+button {
+  font-family: inherit;
+  color: inherit;
+}
+
+input,
+textarea,
+select {
+  font-family: inherit;
+  color: inherit;
+}
+
+::selection {
+  background: var(--wine);
+  color: var(--paper-raised);
+}
+
+/* —— Editorial small-caps label —— */
+.eyebrow {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--ink-muted);
+}
+
+/* —— Markdown rendering (used inside every stage) —— */
 .markdown-content {
-  padding: 12px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--ink);
 }
 
 .markdown-content p {
-  margin: 0 0 12px 0;
+  margin: 0 0 14px 0;
 }
 
 .markdown-content p:last-child {
@@ -47,7 +134,31 @@ body {
 .markdown-content h4,
 .markdown-content h5,
 .markdown-content h6 {
-  margin: 16px 0 8px 0;
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 28px 0 10px 0;
+  line-height: 1.2;
+  font-variation-settings: 'SOFT' 30, 'WONK' 0, 'opsz' 48;
+}
+
+.markdown-content h1 {
+  font-size: 28px;
+}
+.markdown-content h2 {
+  font-size: 22px;
+}
+.markdown-content h3 {
+  font-size: 18px;
+}
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+  font-size: 15px;
+  font-weight: 600;
+  font-family: var(--font-body);
+  letter-spacing: 0;
 }
 
 .markdown-content h1:first-child,
@@ -61,38 +172,123 @@ body {
 
 .markdown-content ul,
 .markdown-content ol {
-  margin: 0 0 12px 0;
+  margin: 0 0 14px 0;
   padding-left: 24px;
 }
 
 .markdown-content li {
-  margin: 4px 0;
+  margin: 6px 0;
+}
+
+.markdown-content li::marker {
+  color: var(--ink-muted);
+}
+
+.markdown-content a {
+  color: var(--wine);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(139, 38, 53, 0.3);
+  transition: border-color 0.15s, color 0.15s;
+}
+.markdown-content a:hover {
+  color: var(--wine-deep);
+  border-bottom-color: var(--wine);
 }
 
 .markdown-content pre {
-  background: #f5f5f5;
-  padding: 12px;
-  border-radius: 4px;
+  background: #1c1912;
+  color: #f0e8d4;
+  padding: 16px 18px;
+  border-radius: var(--radius-md);
   overflow-x: auto;
-  margin: 0 0 12px 0;
+  margin: 0 0 14px 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .markdown-content code {
-  background: #f5f5f5;
-  padding: 2px 6px;
+  background: var(--parchment);
+  color: var(--wine-deep);
+  padding: 1px 6px;
   border-radius: 3px;
-  font-family: monospace;
-  font-size: 0.9em;
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  font-weight: 500;
 }
 
 .markdown-content pre code {
-  background: none;
+  background: transparent;
+  color: inherit;
   padding: 0;
+  font-weight: 400;
 }
 
 .markdown-content blockquote {
-  margin: 0 0 12px 0;
-  padding-left: 16px;
-  border-left: 4px solid #ddd;
-  color: #666;
+  margin: 0 0 14px 0;
+  padding: 2px 0 2px 18px;
+  border-left: 3px solid var(--rule);
+  color: var(--ink-soft);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 16px;
+  font-variation-settings: 'SOFT' 40, 'opsz' 24;
+}
+
+.markdown-content hr {
+  border: none;
+  border-top: 1px solid var(--rule);
+  margin: 24px 0;
+}
+
+.markdown-content strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.markdown-content em {
+  font-style: italic;
+}
+
+.markdown-content table {
+  border-collapse: collapse;
+  margin: 0 0 14px 0;
+  font-size: 14px;
+}
+
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid var(--hairline);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.markdown-content th {
+  background: var(--parchment);
+  font-weight: 600;
+}
+
+/* —— Scrollbars tuned to the palette —— */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--rule);
+  border-radius: 10px;
+  border: 2px solid var(--paper);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-faint);
 }

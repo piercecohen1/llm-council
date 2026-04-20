@@ -4,13 +4,15 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import uuid
 import json
 import asyncio
 
 from . import storage
 from .council import run_full_council, generate_conversation_title, stage1_collect_responses, stage2_collect_rankings, stage3_synthesize_final, calculate_aggregate_rankings
+from .openrouter import list_openrouter_models
+from .config import COUNCIL_MODELS as DEFAULT_COUNCIL_MODELS, CHAIRMAN_MODEL as DEFAULT_CHAIRMAN_MODEL
 
 app = FastAPI(title="LLM Council API")
 
@@ -34,6 +36,20 @@ class SendMessageRequest(BaseModel):
     content: str
     # Default True preserves prior behavior for any older frontend that omits the flag.
     enable_web_search: bool = True
+    # When omitted, backend falls back to COUNCIL_MODELS / CHAIRMAN_MODEL from config.py.
+    council_models: Optional[List[str]] = None
+    chairman_model: Optional[str] = None
+    # Map from model id -> OpenRouter `reasoning` config, e.g. `{"effort": "high"}`.
+    # Models absent from the map use the provider default.
+    reasoning_configs: Optional[Dict[str, Dict[str, Any]]] = None
+
+
+class CouncilConfigRequest(BaseModel):
+    """Request body for creating or updating a council config."""
+    name: str
+    council_models: List[str]
+    chairman_model: str
+    reasoning_configs: Dict[str, Dict[str, Any]] = {}
 
 
 class ConversationMetadata(BaseModel):
@@ -41,6 +57,7 @@ class ConversationMetadata(BaseModel):
     id: str
     created_at: str
     title: str
+    archived: bool = False
     message_count: int
 
 
@@ -49,13 +66,90 @@ class Conversation(BaseModel):
     id: str
     created_at: str
     title: str
+    archived: bool = False
     messages: List[Dict[str, Any]]
+
+
+class ArchiveRequest(BaseModel):
+    """Request to toggle archive state on a conversation."""
+    archived: bool
 
 
 @app.get("/")
 async def root():
     """Health check endpoint."""
     return {"status": "ok", "service": "LLM Council API"}
+
+
+@app.get("/api/models")
+async def list_models(refresh: bool = False):
+    """List available OpenRouter models (cached hourly)."""
+    try:
+        models = await list_openrouter_models(force_refresh=refresh)
+        return {"data": models}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch models: {e}")
+
+
+@app.get("/api/defaults")
+async def get_defaults():
+    """Return the default council + chair used when no config is selected."""
+    return {
+        "council_models": DEFAULT_COUNCIL_MODELS,
+        "chairman_model": DEFAULT_CHAIRMAN_MODEL,
+    }
+
+
+def _validate_council_config(payload: CouncilConfigRequest):
+    if not payload.name.strip():
+        raise HTTPException(status_code=400, detail="name is required")
+    if not payload.council_models:
+        raise HTTPException(status_code=400, detail="council_models must contain at least one model")
+    if not payload.chairman_model.strip():
+        raise HTTPException(status_code=400, detail="chairman_model is required")
+
+
+@app.get("/api/council-configs")
+async def list_council_configs():
+    """List all saved council configs."""
+    return storage.list_council_configs()
+
+
+@app.post("/api/council-configs")
+async def create_council_config(request: CouncilConfigRequest):
+    """Save a new named council config."""
+    _validate_council_config(request)
+    return storage.create_council_config(
+        name=request.name.strip(),
+        council_models=request.council_models,
+        chairman_model=request.chairman_model,
+        reasoning_configs=request.reasoning_configs,
+    )
+
+
+@app.put("/api/council-configs/{config_id}")
+async def update_council_config(config_id: str, request: CouncilConfigRequest):
+    """Update an existing council config."""
+    _validate_council_config(request)
+    updated = storage.update_council_config(
+        config_id,
+        name=request.name.strip(),
+        council_models=request.council_models,
+        chairman_model=request.chairman_model,
+        reasoning_configs=request.reasoning_configs,
+    )
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Council config not found")
+    return updated
+
+
+@app.delete("/api/council-configs/{config_id}")
+async def delete_council_config(config_id: str):
+    """Delete a council config."""
+    ok = storage.delete_council_config(config_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Council config not found")
+    return {"status": "ok"}
 
 
 @app.get("/api/conversations", response_model=List[ConversationMetadata])
@@ -79,6 +173,30 @@ async def get_conversation(conversation_id: str):
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return conversation
+
+
+@app.patch("/api/conversations/{conversation_id}/archive", response_model=ConversationMetadata)
+async def set_archive_state(conversation_id: str, request: ArchiveRequest):
+    """Archive or unarchive a conversation."""
+    updated = storage.set_conversation_archived(conversation_id, request.archived)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return {
+        "id": updated["id"],
+        "created_at": updated["created_at"],
+        "title": updated.get("title", "New Conversation"),
+        "archived": bool(updated.get("archived", False)),
+        "message_count": len(updated.get("messages", [])),
+    }
+
+
+@app.delete("/api/conversations/{conversation_id}")
+async def delete_conversation(conversation_id: str):
+    """Permanently delete a conversation."""
+    ok = storage.delete_conversation(conversation_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return {"status": "ok"}
 
 
 @app.post("/api/conversations/{conversation_id}/message")
@@ -107,6 +225,9 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
     stage1_results, stage2_results, stage3_result, metadata = await run_full_council(
         request.content,
         enable_web_search=request.enable_web_search,
+        council_models=request.council_models,
+        chairman_model=request.chairman_model,
+        reasoning_configs=request.reasoning_configs,
     )
 
     # Add assistant message with all stages
@@ -153,13 +274,21 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
             # Stage 1: Collect responses
             yield f"data: {json.dumps({'type': 'stage1_start'})}\n\n"
             stage1_results = await stage1_collect_responses(
-                request.content, enable_web_search=request.enable_web_search
+                request.content,
+                enable_web_search=request.enable_web_search,
+                council_models=request.council_models,
+                reasoning_configs=request.reasoning_configs,
             )
             yield f"data: {json.dumps({'type': 'stage1_complete', 'data': stage1_results})}\n\n"
 
             # Stage 2: Collect rankings
             yield f"data: {json.dumps({'type': 'stage2_start'})}\n\n"
-            stage2_results, label_to_model = await stage2_collect_rankings(request.content, stage1_results)
+            stage2_results, label_to_model = await stage2_collect_rankings(
+                request.content,
+                stage1_results,
+                council_models=request.council_models,
+                reasoning_configs=request.reasoning_configs,
+            )
             aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
             yield f"data: {json.dumps({'type': 'stage2_complete', 'data': stage2_results, 'metadata': {'label_to_model': label_to_model, 'aggregate_rankings': aggregate_rankings}})}\n\n"
 
@@ -170,6 +299,8 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
                 stage1_results,
                 stage2_results,
                 enable_web_search=request.enable_web_search,
+                chairman_model=request.chairman_model,
+                reasoning_configs=request.reasoning_configs,
             )
             yield f"data: {json.dumps({'type': 'stage3_complete', 'data': stage3_result})}\n\n"
 

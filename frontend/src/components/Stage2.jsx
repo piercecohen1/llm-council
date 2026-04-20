@@ -2,14 +2,15 @@ import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import './Stage2.css';
 
+function shortName(model) {
+  return model.split('/')[1] || model;
+}
+
 function deAnonymizeText(text, labelToModel) {
   if (!labelToModel) return text;
-
   let result = text;
-  // Replace each "Response X" with the actual model name
   Object.entries(labelToModel).forEach(([label, model]) => {
-    const modelShortName = model.split('/')[1] || model;
-    result = result.replace(new RegExp(label, 'g'), `**${modelShortName}**`);
+    result = result.replace(new RegExp(label, 'g'), `**${shortName(model)}**`);
   });
   return result;
 }
@@ -21,47 +22,79 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings }) {
     return null;
   }
 
+  const active = rankings[activeTab];
+
   return (
-    <div className="stage stage2">
-      <h3 className="stage-title">Stage 2: Peer Rankings</h3>
+    <section className="stage stage--2">
+      <header className="stage__header">
+        <div className="stage__numeral">II</div>
+        <div className="stage__meta">
+          <h3 className="stage__title">Peer Review</h3>
+          <p className="stage__dek">
+            Members evaluate one another anonymously as <em>Response A, B, C…</em>
+            — identities are revealed below for your reading.
+          </p>
+        </div>
+      </header>
 
-      <h4>Raw Evaluations</h4>
-      <p className="stage-description">
-        Each model evaluated all responses (anonymized as Response A, B, C, etc.) and provided rankings.
-        Below, model names are shown in <strong>bold</strong> for readability, but the original evaluation used anonymous labels.
-      </p>
+      {aggregateRankings && aggregateRankings.length > 0 && (
+        <div className="standings">
+          <div className="standings__head">
+            <span className="eyebrow">Standings</span>
+            <span className="standings__note">Lower rank is better · averaged across all reviews</span>
+          </div>
+          <ol className="standings__list">
+            {aggregateRankings.map((agg, index) => (
+              <li key={index} className={`standings__item ${index === 0 ? 'standings__item--first' : ''}`}>
+                <span className="standings__position">
+                  {['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][index] || `${index + 1}`}
+                </span>
+                <span className="standings__model">{shortName(agg.model)}</span>
+                <span className="standings__score">
+                  <span className="standings__score-val">{agg.average_rank.toFixed(2)}</span>
+                  <span className="standings__score-count">
+                    · {agg.rankings_count} {agg.rankings_count === 1 ? 'vote' : 'votes'}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
 
-      <div className="tabs">
+      <div className="tabs" role="tablist">
         {rankings.map((rank, index) => (
           <button
             key={index}
-            className={`tab ${activeTab === index ? 'active' : ''}`}
+            role="tab"
+            aria-selected={activeTab === index}
+            className={`tab ${activeTab === index ? 'tab--active' : ''}`}
             onClick={() => setActiveTab(index)}
           >
-            {rank.model.split('/')[1] || rank.model}
+            <span className="tab__name">{shortName(rank.model)}</span>
           </button>
         ))}
       </div>
 
-      <div className="tab-content">
-        <div className="ranking-model">
-          {rankings[activeTab].model}
+      <div className="stage__panel">
+        <div className="stage__panel-head">
+          <span className="eyebrow">Review by</span>
+          <span className="stage__model-id">{active.model}</span>
         </div>
-        <div className="ranking-content markdown-content">
+        <div className="stage__panel-body markdown-content">
           <ReactMarkdown>
-            {deAnonymizeText(rankings[activeTab].ranking, labelToModel)}
+            {deAnonymizeText(active.ranking, labelToModel)}
           </ReactMarkdown>
         </div>
 
-        {rankings[activeTab].parsed_ranking &&
-         rankings[activeTab].parsed_ranking.length > 0 && (
-          <div className="parsed-ranking">
-            <strong>Extracted Ranking:</strong>
-            <ol>
-              {rankings[activeTab].parsed_ranking.map((label, i) => (
+        {active.parsed_ranking && active.parsed_ranking.length > 0 && (
+          <div className="parsed">
+            <div className="parsed__label eyebrow">Extracted Ranking</div>
+            <ol className="parsed__list">
+              {active.parsed_ranking.map((label, i) => (
                 <li key={i}>
                   {labelToModel && labelToModel[label]
-                    ? labelToModel[label].split('/')[1] || labelToModel[label]
+                    ? shortName(labelToModel[label])
                     : label}
                 </li>
               ))}
@@ -69,31 +102,6 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings }) {
           </div>
         )}
       </div>
-
-      {aggregateRankings && aggregateRankings.length > 0 && (
-        <div className="aggregate-rankings">
-          <h4>Aggregate Rankings (Street Cred)</h4>
-          <p className="stage-description">
-            Combined results across all peer evaluations (lower score is better):
-          </p>
-          <div className="aggregate-list">
-            {aggregateRankings.map((agg, index) => (
-              <div key={index} className="aggregate-item">
-                <span className="rank-position">#{index + 1}</span>
-                <span className="rank-model">
-                  {agg.model.split('/')[1] || agg.model}
-                </span>
-                <span className="rank-score">
-                  Avg: {agg.average_rank.toFixed(2)}
-                </span>
-                <span className="rank-count">
-                  ({agg.rankings_count} votes)
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+    </section>
   );
 }

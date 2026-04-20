@@ -5,21 +5,24 @@ from .openrouter import query_models_parallel, query_model
 from .config import COUNCIL_MODELS, CHAIRMAN_MODEL
 
 
-async def stage1_collect_responses(user_query: str) -> List[Dict[str, Any]]:
+async def stage1_collect_responses(
+    user_query: str,
+    enable_web_search: bool = True,
+) -> List[Dict[str, Any]]:
     """
     Stage 1: Collect individual responses from all council models.
 
     Args:
         user_query: The user's question
+        enable_web_search: If True, attach openrouter:web_search to each council query.
 
     Returns:
         List of dicts with 'model' and 'response' keys
     """
     messages = [{"role": "user", "content": user_query}]
 
-    # Stage 1 is where fresh facts matter most — let each council member hit the web.
     responses = await query_models_parallel(
-        COUNCIL_MODELS, messages, enable_web_search=True
+        COUNCIL_MODELS, messages, enable_web_search=enable_web_search
     )
 
     stage1_results = []
@@ -118,7 +121,8 @@ Now provide your evaluation and ranking:"""
 async def stage3_synthesize_final(
     user_query: str,
     stage1_results: List[Dict[str, Any]],
-    stage2_results: List[Dict[str, Any]]
+    stage2_results: List[Dict[str, Any]],
+    enable_web_search: bool = True,
 ) -> Dict[str, Any]:
     """
     Stage 3: Chairman synthesizes final response.
@@ -161,8 +165,9 @@ Provide a clear, well-reasoned final answer that represents the council's collec
 
     messages = [{"role": "user", "content": chairman_prompt}]
 
-    # Chairman can also search the web if synthesis needs verification or fresh data.
-    response = await query_model(CHAIRMAN_MODEL, messages, enable_web_search=True)
+    response = await query_model(
+        CHAIRMAN_MODEL, messages, enable_web_search=enable_web_search
+    )
 
     if response is None:
         return {
@@ -298,37 +303,39 @@ Title:"""
     return title
 
 
-async def run_full_council(user_query: str) -> Tuple[List, List, Dict, Dict]:
+async def run_full_council(
+    user_query: str,
+    enable_web_search: bool = True,
+) -> Tuple[List, List, Dict, Dict]:
     """
     Run the complete 3-stage council process.
 
     Args:
         user_query: The user's question
+        enable_web_search: If True, Stage 1 and Stage 3 get the web_search server tool.
 
     Returns:
         Tuple of (stage1_results, stage2_results, stage3_result, metadata)
     """
-    # Stage 1: Collect individual responses
-    stage1_results = await stage1_collect_responses(user_query)
+    stage1_results = await stage1_collect_responses(
+        user_query, enable_web_search=enable_web_search
+    )
 
-    # If no models responded successfully, return error
     if not stage1_results:
         return [], [], {
             "model": "error",
             "response": "All models failed to respond. Please try again."
         }, {}
 
-    # Stage 2: Collect rankings
     stage2_results, label_to_model = await stage2_collect_rankings(user_query, stage1_results)
 
-    # Calculate aggregate rankings
     aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
 
-    # Stage 3: Synthesize final answer
     stage3_result = await stage3_synthesize_final(
         user_query,
         stage1_results,
-        stage2_results
+        stage2_results,
+        enable_web_search=enable_web_search,
     )
 
     # Prepare metadata

@@ -102,11 +102,112 @@
 
 .input-form {
   display: flex;
-  align-items: flex-end;
-  gap: 12px;
+  flex-direction: column;
+  gap: 10px;
   padding: 24px;
   border-top: 1px solid #e0e0e0;
   background: #fafafa;
+}
+
+.input-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+/* Web search toggle — compact pill with a sliding switch */
+.web-search-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px 6px 8px;
+  background: #ffffff;
+  border: 1px solid #d7dde5;
+  border-radius: 999px;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.web-search-toggle:hover {
+  border-color: #b9c3d1;
+}
+
+.web-search-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.web-search-toggle.on {
+  border-color: #4a90e2;
+  background: #eff6ff;
+  box-shadow: 0 0 0 1px rgba(74, 144, 226, 0.15);
+}
+
+.web-search-switch {
+  position: relative;
+  display: inline-block;
+  width: 30px;
+  height: 18px;
+  background: #cbd2db;
+  border-radius: 999px;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.web-search-toggle.on .web-search-switch {
+  background: #4a90e2;
+}
+
+.web-search-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 0.15s;
+}
+
+.web-search-toggle.on .web-search-thumb {
+  transform: translateX(12px);
+}
+
+.web-search-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #4a5568;
+}
+
+.web-search-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.web-search-state {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #9aa4b2;
+}
+
+.web-search-toggle.on .web-search-state {
+  color: #4a90e2;
 }
 
 .message-input {

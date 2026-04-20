@@ -4,11 +4,21 @@ import ChatInterface from './components/ChatInterface';
 import { api } from './api';
 import './App.css';
 
+const WEB_SEARCH_STORAGE_KEY = 'llm-council.webSearchEnabled';
+
 function App() {
   const [conversations, setConversations] = useState([]);
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [currentConversation, setCurrentConversation] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(() => {
+    const stored = localStorage.getItem(WEB_SEARCH_STORAGE_KEY);
+    return stored === null ? true : stored === 'true';
+  });
+
+  useEffect(() => {
+    localStorage.setItem(WEB_SEARCH_STORAGE_KEY, String(webSearchEnabled));
+  }, [webSearchEnabled]);
 
   // Load conversations on mount
   useEffect(() => {
@@ -169,7 +179,7 @@ function App() {
           default:
             console.log('Unknown event type:', eventType);
         }
-      });
+      }, { enableWebSearch: webSearchEnabled });
     } catch (error) {
       console.error('Failed to send message:', error);
       // Remove optimistic messages on error
@@ -193,6 +203,8 @@ function App() {
         conversation={currentConversation}
         onSendMessage={handleSendMessage}
         isLoading={isLoading}
+        webSearchEnabled={webSearchEnabled}
+        onToggleWebSearch={setWebSearchEnabled}
       />
     </div>
   );
